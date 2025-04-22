@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "378159879153",
+    "project_id": "tuner-a-bemol",
+    "storage_bucket": "tuner-a-bemol.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:378159879153:android:1f3eafdc74c99fe6ceea50",
+        "android_client_info": {
+          "package_name": "salimi.mohammad.testtwofortuner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWjlh4pxBVM4clRv1j2D2ntSeFtco74kc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
