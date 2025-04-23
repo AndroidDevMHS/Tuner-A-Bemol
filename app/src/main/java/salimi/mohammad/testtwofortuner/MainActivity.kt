@@ -12,9 +12,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import be.tarsos.dsp.AudioDispatcher
@@ -31,15 +31,12 @@ import kotlin.math.abs
 import kotlin.math.log2
 import kotlin.math.pow
 
-val isHighPrecisionMode = mutableStateOf(false)
-
 class MainActivity : ComponentActivity() {
 
     private var audioRecord: AudioRecord? = null
     private var dispatcher: AudioDispatcher? = null
     private var isRecording = false
     private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
-    val isHighPrecisionMode = mutableStateOf(false)
     private var lastDeviationUpdateTime = 0L
 
     companion object {
@@ -97,6 +94,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    val viewModel by viewModels<TunerViewModel>()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestPermissionLauncher = registerForActivityResult(
@@ -114,12 +112,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
         setContent {
             TestTwoForTunerTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    TuneerScreen(isHighPrecisionMode)
+                    TuneerScreen(viewModel)
                 }
             }
         }
@@ -348,7 +347,7 @@ class MainActivity : ComponentActivity() {
 
             Log.e(
                 "PitchDetection",
-                "Starting: SampleRate=$sampleRate, BufferSize=$bufferSize, Mode=${if (isHighPrecisionMode.value) "HighPrecision" else "Standard"}, Algorithm=FFT_YIN"
+                "Starting: SampleRate=$sampleRate, BufferSize=$bufferSize, Mode=${if (viewModel.isHighPrecision.value) "HighPrecision" else "Standard"}, Algorithm=FFT_YIN"
             )
 
             if (ContextCompat.checkSelfPermission(
@@ -414,7 +413,7 @@ class MainActivity : ComponentActivity() {
             val filter = BandPass(50f, 2500f, sampleRate.toFloat())
             dispatcher?.addAudioProcessor(filter)
 
-            Log.e("Tuning", "A4 Frequency: ${tuningState.value.referenceFrequency} Hz")
+
 
             val recentPitches = mutableListOf<Float>()
             val smoothingWindow = 2
@@ -439,7 +438,7 @@ class MainActivity : ComponentActivity() {
 
                         val smoothedPitch = recentPitches.average().toFloat()
                         val kalmanFilter = SimpleKalmanFilter()
-                        val effectivePitch = if (isHighPrecisionMode.value) {
+                        val effectivePitch = if (viewModel.isHighPrecision.value) {
                             kalmanFilter.update(smoothedPitch.toDouble()).toFloat()
                         } else {
                             smoothedPitch
@@ -450,7 +449,7 @@ class MainActivity : ComponentActivity() {
                             "Raw Pitch: $pitchInHz, Smoothed Pitch: $smoothedPitch, Effective Pitch: $effectivePitch, Amplitude: $amplitude, Probability: $probability"
                         )
 
-                        val tuningState = tuningState.value
+                        val tuningState = viewModel.tuningState.value
                         val standardFrequencies = getNotes(tuningState.referenceFrequency)
                         val closestNote = getClosestNote(effectivePitch, standardFrequencies)
                         val deviation = calculateDeviation(
@@ -458,13 +457,13 @@ class MainActivity : ComponentActivity() {
                             closestNote.standardFrequency
                         )
 
-                        tunerState.value = TunerState(
+                        viewModel.tunerState.value = TunerState(
                             frequency = effectivePitch,
                             note = closestNote.name,
                             deviation = deviation,
                             hasValidPitch = true
                         )
-                        closestNoteState.value = closestNote
+                        viewModel.closestNoteState.value = closestNote
 
                         deviationHistory.add(deviation * 100)
                         if (deviationHistory.size > MAX_HISTORY_SIZE) {
@@ -482,13 +481,13 @@ class MainActivity : ComponentActivity() {
                     runOnUiThread {
                         // اگر زمان زیادی از آخرین فرکانس معتبر گذشته، ریست کن
                         if (currentTime - lastValidPitchTime > pitchTimeoutMs) {
-                            tunerState.value = TunerState(
+                            viewModel.tunerState.value = TunerState(
                                 frequency = 0f,
                                 note = "---",
                                 deviation = 0f,
                                 hasValidPitch = false
                             )
-                            closestNoteState.value = ClosestNote("---", 0, 0.0)
+                            viewModel.closestNoteState.value = ClosestNote("---", 0, 0.0)
                             recentPitches.clear() // پاک کردن میانگین متحرک
                         }
                         // در غیر این صورت، tunerState تغییر نمی‌کنه و آخرین مقدار معتبر حفظ می‌شه
@@ -632,7 +631,7 @@ class MainActivity : ComponentActivity() {
         if (frequency <= 0 || closestFreq <= 0) return 0f
         val semitoneDiff = 12 * log2(frequency / closestFreq).toFloat()
         val corrected =
-            if (isHighPrecisionMode.value) semitoneDiff else if (abs(semitoneDiff) < 0.005f) 0f else semitoneDiff
+            if (viewModel.isHighPrecision.value) semitoneDiff else if (abs(semitoneDiff) < 0.005f) 0f else semitoneDiff
         return corrected.coerceIn(-1f, 1f)
     }
 
@@ -646,24 +645,3 @@ class MainActivity : ComponentActivity() {
         deviationHistory.clear()
     }
 }
-
-data class TunerState(
-    val frequency: Float = 0f,
-    val note: String = "---",
-    val deviation: Float = 0f,
-    val hasValidPitch: Boolean = false
-)
-
-data class TuningState(
-    val referenceFrequency: Float = 440f
-)
-
-data class ClosestNote(
-    val name: String,
-    val octave: Int,
-    val standardFrequency: Double
-)
-
-val tunerState = mutableStateOf(TunerState())
-val tuningState = mutableStateOf(TuningState())
-val closestNoteState = mutableStateOf(ClosestNote("---", 0, 0.0))

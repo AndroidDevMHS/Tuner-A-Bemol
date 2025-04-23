@@ -1,23 +1,40 @@
 package salimi.mohammad.testtwofortuner
 
+import kotlin.math.abs
+
 class SimpleKalmanFilter(
-    private val processNoise: Double = 0.08, // کاهش نویز فرآیند برای پایداری
-    private val measurementNoise: Double = 1.0, // افزایش نویز اندازه‌گیری برای هموارسازی
-    private val estimationError: Double = 0.1
+    private var processNoise: Double = 0.01, // Balanced for stability
+    private var measurementNoise: Double = 0.01, // Balanced for noise
+    private var estimate: Double = 0.0,
+    private var errorCovariance: Double = 1.0
 ) {
-    private var estimate = 0.0
-    private var errorCovariance = estimationError
+    private val recentMeasurements = mutableListOf<Double>()
+    private val maxMeasurements = 8
 
     fun update(measurement: Double): Double {
-        // پیش‌بینی
+        recentMeasurements.add(measurement)
+        if (recentMeasurements.size > maxMeasurements) {
+            recentMeasurements.removeAt(0)
+        }
+
+        val isStable = if (recentMeasurements.size == maxMeasurements) {
+            val mean = recentMeasurements.average()
+            recentMeasurements.all { abs(it - mean) < 2.0 } // Balanced for C3
+        } else {
+            false
+        }
+
+        if (abs(measurement - estimate) > 10.0 || !isStable) {
+            estimate = measurement
+            errorCovariance = 1.0
+            return estimate
+        }
+
         val predictedEstimate = estimate
-        val predictedErrorCovariance = errorCovariance + processNoise
-
-        // به‌روزرسانی
-        val kalmanGain = predictedErrorCovariance / (predictedErrorCovariance + measurementNoise)
+        val predictedCovariance = errorCovariance + processNoise
+        val kalmanGain = predictedCovariance / (predictedCovariance + measurementNoise)
         estimate = predictedEstimate + kalmanGain * (measurement - predictedEstimate)
-        errorCovariance = (1 - kalmanGain) * predictedErrorCovariance
-
+        errorCovariance = (1 - kalmanGain) * predictedCovariance
         return estimate
     }
 }

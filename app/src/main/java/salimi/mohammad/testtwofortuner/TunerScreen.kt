@@ -1,5 +1,6 @@
 package salimi.mohammad.testtwofortuner
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -41,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,18 +72,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.res.ResourcesCompat
-import salimi.mohammad.testtwofortuner.ui.theme.Green
 import salimi.mohammad.testtwofortuner.ui.theme.MusicGold
 import salimi.mohammad.testtwofortuner.ui.theme.PearlWhite
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
+@SuppressLint("DefaultLocale")
 @Composable
-fun TuneerScreen(isHighPrecisionMode: MutableState<Boolean>) {
-    val state by tunerState
-    val closestNote by closestNoteState
-    var tuning by tuningState
+fun TuneerScreen(tunerViewModel: TunerViewModel) {
+    val state by tunerViewModel.tunerState
+    val closestNote by tunerViewModel.closestNoteState
+    var tuning by tunerViewModel.tuningState
     val context = LocalContext.current
     val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
@@ -91,6 +93,9 @@ fun TuneerScreen(isHighPrecisionMode: MutableState<Boolean>) {
     var showAbout by remember { mutableStateOf(false) }
     var keepScreenOn by remember { mutableStateOf(false) } // حالت پیش‌فرض: روشن ماندن صفحه
     var deviationRounded = (state.deviation * 100).toInt() / 100f
+
+    var isHighPrecisionMode = tunerViewModel.isHighPrecision.collectAsState(initial = false)
+
     // اعمال یا حذف پرچم بر اساس انتخاب کاربر
     LaunchedEffect(keepScreenOn) {
         if (keepScreenOn) {
@@ -116,15 +121,15 @@ fun TuneerScreen(isHighPrecisionMode: MutableState<Boolean>) {
         label = "animatedDeviation"
     )
 
-/*
-    val animatedDeviation by animateFloatAsState(
-        targetValue = if (keepScreenOn) deviationRounded else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioHighBouncy, // افزایش damping
-            stiffness = Spring.StiffnessMedium // پاسخ‌گویی متعادل
-        ),
-        label = "animatedDeviation"
-    )*/
+    /*
+        val animatedDeviation by animateFloatAsState(
+            targetValue = if (keepScreenOn) deviationRounded else 0f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioHighBouncy, // افزایش damping
+                stiffness = Spring.StiffnessMedium // پاسخ‌گویی متعادل
+            ),
+            label = "animatedDeviation"
+        )*/
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -172,11 +177,11 @@ fun TuneerScreen(isHighPrecisionMode: MutableState<Boolean>) {
                         Checkbox(
                             checked = isHighPrecisionMode.value,
                             onCheckedChange = { isChecked ->
-                                isHighPrecisionMode.value = isChecked
+                                tunerViewModel.isHighPrecision.value=isChecked
                                 (context as? MainActivity)?.stopAndRestartPitchDetection()
                                 Toast.makeText(
                                     context,
-                                    if (isHighPrecisionMode.value) "حالت دقت بالا فعال شد" else "حالت دقت استاندارد فعال شد",
+                                    if (isChecked) "حالت دقت بالا فعال شد" else "حالت دقت استاندارد فعال شد",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             },
@@ -212,10 +217,10 @@ fun TuneerScreen(isHighPrecisionMode: MutableState<Boolean>) {
 
             val gradientGreen = Brush.verticalGradient(
                 listOf(
-                        Color(0xFF006400), // DarkGreen
-                        Color(0xFF228B22), // ForestGreen
-                        Color(0xFF32CD32), // LimeGreen
-                        Color(0xFF7CFC00)  // LawnGreen
+                    Color(0xFF006400), // DarkGreen
+                    Color(0xFF228B22), // ForestGreen
+                    Color(0xFF32CD32), // LimeGreen
+                    Color(0xFF7CFC00)  // LawnGreen
                 )
             )
             Box(
@@ -224,8 +229,11 @@ fun TuneerScreen(isHighPrecisionMode: MutableState<Boolean>) {
                     .clip(RoundedCornerShape(16.dp))
                     .fillMaxWidth()
                     .height(48.dp)
-                    .background(brush = if (keepScreenOn)  gradientGreen else gradientGold)
-                    .clickable{ keepScreenOn = !keepScreenOn },
+                    .background(brush = if (keepScreenOn) gradientGreen else gradientGold)
+                    .clickable {
+                        keepScreenOn = !keepScreenOn
+                        tunerViewModel.keepScreenOn.value=!tunerViewModel.keepScreenOn.value
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -324,7 +332,7 @@ fun TuneerScreen(isHighPrecisionMode: MutableState<Boolean>) {
                     ) else "0.00"
                     val centValueBounds = android.graphics.Rect()
                     textPaint.getTextBounds(centValue, 0, centValue.length, centValueBounds)
-                    val xValue = size.width / 2 - centBounds.width() / 2 
+                    val xValue = size.width / 2 - centBounds.width() / 2
                     val yValue = yCent + centBounds.height() + 40f
                     drawContext.canvas.nativeCanvas.drawText(
                         centValue,
@@ -726,28 +734,26 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "توسعه داده شده توسط محمدحسین سلیمی\n"
-
-                            ,
+                    text = "توسعه داده شده توسط محمدحسین سلیمی\n",
                     style = MaterialTheme.typography.displayMedium,
                     color = PearlWhite,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(15.dp))
                 Text(
-                    text ="Email\n" +
+                    text ="Email:\n" +
                             "Salimii.mohamadhosein@gmail.com\n",
                     style = MaterialTheme.typography.displaySmall,
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                     color = PearlWhite,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text ="TelegramID\n" +
+                    text ="TelegramID:\n" +
                             "Mohmmd_salimi\n",
                     style = MaterialTheme.typography.displaySmall,
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                     color = PearlWhite,
                     textAlign = TextAlign.Center
                 )
