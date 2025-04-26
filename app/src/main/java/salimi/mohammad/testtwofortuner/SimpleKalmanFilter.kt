@@ -4,7 +4,7 @@ import kotlin.math.abs
 
 class SimpleKalmanFilter(
     private var processNoise: Double = 0.01, // Balanced for stability
-    private var measurementNoise: Double = 0.01, // Balanced for noise
+    private var measurementNoise: Double = 0.1, // Balanced for noise
     private var estimate: Double = 0.0,
     private var errorCovariance: Double = 1.0
 ) {

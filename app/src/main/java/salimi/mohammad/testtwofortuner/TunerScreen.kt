@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -115,21 +114,12 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
     val animatedDeviation by animateFloatAsState(
         targetValue = if (keepScreenOn) deviationRounded else 0f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioHighBouncy, // کاهش damping برای حرکت سریع‌تر
-            stiffness = Spring.StiffnessHigh // پاسخ‌گویی فوری
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
         ),
         label = "animatedDeviation"
     )
 
-    /*
-        val animatedDeviation by animateFloatAsState(
-            targetValue = if (keepScreenOn) deviationRounded else 0f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioHighBouncy, // افزایش damping
-                stiffness = Spring.StiffnessMedium // پاسخ‌گویی متعادل
-            ),
-            label = "animatedDeviation"
-        )*/
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -207,7 +197,6 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
 
             val gradientGold = Brush.verticalGradient(
                 listOf(
-                    //Color(0xFF3e2f1e),
                     Color(0xFF71542b),
                     Color(0xFFa7782f),
                     Color(0xFFd9a648),
@@ -217,10 +206,10 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
 
             val gradientGreen = Brush.verticalGradient(
                 listOf(
-                    Color(0xFF006400), // DarkGreen
-                    Color(0xFF228B22), // ForestGreen
-                    Color(0xFF32CD32), // LimeGreen
-                    Color(0xFF7CFC00)  // LawnGreen
+                    Color(0xFF006400),
+                    Color(0xFF228B22),
+                    Color(0xFF32CD32),
+                    Color(0xFF7CFC00)
                 )
             )
             Box(
@@ -232,7 +221,7 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
                     .background(brush = if (keepScreenOn) gradientGreen else gradientGold)
                     .clickable {
                         keepScreenOn = !keepScreenOn
-                        tunerViewModel.keepScreenOn.value=!tunerViewModel.keepScreenOn.value
+                        tunerViewModel.keepScreenOn.value = !tunerViewModel.keepScreenOn.value
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -291,9 +280,9 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
                     }
 
                     val note =
-                        if (closestNote.name == "" || keepScreenOn == false) "" else closestNote.name
+                        if (closestNote.name == "" || keepScreenOn == false) "---" else closestNote.name
                     val octave =
-                        if (closestNote.name == "---" || keepScreenOn == false) "---" else "${closestNote.octave}"
+                        if (closestNote.name == "---" || keepScreenOn == false) "-" else "${closestNote.octave}"
                     textMusic.getTextBounds(note, 0, note.length, noteBounds)
                     val xNoteV = 98f
                     val yNoteV = yNote + noteBounds.height() + 40f
@@ -510,16 +499,6 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
                     )
                 }
             }
-
-            if (keepScreenOn) {
-                DeviationHistoryPlot(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .background(Color.Transparent, RoundedCornerShape(12.dp))
-                        .padding(8.dp, bottom = 15.dp)
-                )
-            }
         }
         IconButton(
             onClick = { showAbout = true },
@@ -541,101 +520,6 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
     }
 }
 
-@Composable
-fun DeviationHistoryPlot(modifier: Modifier = Modifier) {
-    var history by remember { mutableStateOf(listOf<Float>()) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            history = MainActivity.deviationHistory.toList()
-            if (history.isEmpty()) {
-                MainActivity.deviationHistory.add(0f)
-                history = MainActivity.deviationHistory.toList()
-            }
-            kotlinx.coroutines.delay(100L)
-        }
-    }
-
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val maxDeviation = 60f // حداکثر انحراف ±60 سنت
-        val path = Path()
-
-        // رسم خط صفر
-        drawLine(
-            color = Color.Gray,
-            start = Offset(0f, height / 2),
-            end = Offset(width, height / 2),
-            strokeWidth = 2f
-        )
-
-        // رسم خطوط مرجع (±20 و ±40 سنت)
-        listOf(-40f, -20f, 20f, 40f).forEach { cent ->
-            val y = height / 2 - (cent / maxDeviation) * (height / 2)
-            drawLine(
-                color = PearlWhite.copy(alpha = 0.3f),
-                start = Offset(0f, y),
-                end = Offset(width, y),
-                strokeWidth = 1f
-            )
-        }
-
-        // رسم نمودار
-        if (history.isNotEmpty()) {
-            val stepX = width / (history.size - 1).coerceAtLeast(1).toFloat()
-            path.moveTo(0f, height / 2 - (history[0] / maxDeviation) * (height / 2))
-
-            history.forEachIndexed { index, deviation ->
-                val x = index * stepX
-                val y = height / 2 - (deviation / maxDeviation) * (height / 2)
-                path.lineTo(x, y)
-            }
-
-            drawPath(
-                path = path,
-                color = MusicGold,
-                style = Stroke(width = 3f, cap = StrokeCap.Round)
-            )
-        }
-
-        // رسم برچسب‌ها
-        val textPaint = Paint().asFrameworkPaint().apply {
-            isAntiAlias = true
-            textSize = 24f
-            color = PearlWhite.toArgb()
-            textAlign = android.graphics.Paint.Align.RIGHT
-        }
-
-        drawContext.canvas.nativeCanvas.apply {
-            drawText(
-                "+40",
-                width - 8f,
-                height / 2 - (40f / maxDeviation) * (height / 2) + 8f,
-                textPaint
-            )
-            drawText(
-                "+20",
-                width - 8f,
-                height / 2 - (20f / maxDeviation) * (height / 2) + 8f,
-                textPaint
-            )
-            drawText("0", width - 8f, height / 2 + 8f, textPaint)
-            drawText(
-                "-20",
-                width - 8f,
-                height / 2 - (-20f / maxDeviation) * (height / 2) + 8f,
-                textPaint
-            )
-            drawText(
-                "-40",
-                width - 8f,
-                height / 2 - (-40f / maxDeviation) * (height / 2) + 8f,
-                textPaint
-            )
-        }
-    }
-}
 
 @Composable
 fun SelectAFrequency(onDismiss: () -> Unit, selectedNumber: MutableState<Int>) {

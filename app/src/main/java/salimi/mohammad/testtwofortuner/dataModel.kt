@@ -9,7 +9,7 @@ data class Note(
 
 data class TunerState(
     val frequency: Float = 0f,
-    val note: String = "---",
+    val note: String = "",
     val deviation: Float = 0f,
     val hasValidPitch: Boolean = false
 )
