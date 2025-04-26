@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private var cachedNotes: List<Note> = emptyList()
         private var cachedA4Frequency: Float = 440f
-        private const val UPDATE_INTERVAL_MS = 100L
+        private const val UPDATE_INTERVAL_MS = 20L
 
         fun getNotes(a4Frequency: Float): List<Note> {
             if (cachedNotes.isNotEmpty() && cachedA4Frequency == a4Frequency) {
@@ -228,7 +228,7 @@ class MainActivity : ComponentActivity() {
 
             dispatcher = AudioDispatcher(audioInputStream, bufferSize, 0)
 
-            val filter = BandPass(40f, 2500f, sampleRate.toFloat())
+            val filter = BandPass(40f, 3000f, sampleRate.toFloat())
             dispatcher?.addAudioProcessor(filter)
 
             val recentPitches = mutableListOf<Float>()
@@ -240,7 +240,7 @@ class MainActivity : ComponentActivity() {
                 val pitchInHz = result.pitch
                 val probability = result.probability
                 val amplitude = audioEvent.rms
-                val isPitchReliable = probability > 0.85f && amplitude > 0.5f && amplitude < 10000f
+                val isPitchReliable = probability > 0.86f && amplitude > 0.5f && amplitude < 10000f
 
                 val currentTime = System.currentTimeMillis()
                 if (currentTime - lastDeviationUpdateTime < UPDATE_INTERVAL_MS) return@PitchDetectionHandler
@@ -256,7 +256,7 @@ class MainActivity : ComponentActivity() {
                         val effectivePitch = if (viewModel.isHighPrecision.value) {
                             kalmanFilter.update(smoothedPitch.toDouble()).toFloat()
                         } else {
-                            smoothedPitch
+                            pitchInHz
                         }
                         val tuningState = viewModel.tuningState.value
                         val standardFrequencies = getNotes(tuningState.referenceFrequency)
@@ -300,7 +300,7 @@ class MainActivity : ComponentActivity() {
             }
 
             val pitchProcessor = PitchProcessor(
-                PitchProcessor.PitchEstimationAlgorithm.FFT_YIN,
+                PitchProcessor.PitchEstimationAlgorithm.FFT_PITCH,
                 sampleRate.toFloat(),
                 bufferSize,
                 pdh
@@ -357,7 +357,7 @@ class MainActivity : ComponentActivity() {
         val candidates = standardNotes
             .map { note -> note to abs(1200 * log2(freqDouble / note.frequency)) }
             .sortedBy { it.second }
-            .take(3) // بررسی سه کاندید برای دقت بیشتر
+            .take(2) // بررسی سه کاندید برای دقت بیشتر
 
         // انتخاب نت: ابتدا بکار، سپس کرن با انحراف بسیار کم
         val closest = candidates.firstOrNull { it.first.variation == "" && it.second < 25.0 }?.first
@@ -380,7 +380,7 @@ class MainActivity : ComponentActivity() {
         val corrected =
             if (viewModel.isHighPrecision.value && abs(semitoneDiff) < 0.009f) 0f else if (abs(
                     semitoneDiff
-                ) < 0.02f
+                ) < 0.001f
             ) 0f else semitoneDiff
         return corrected.coerceIn(-1f, 1f)
     }
