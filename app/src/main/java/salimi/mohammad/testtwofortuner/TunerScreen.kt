@@ -1,7 +1,9 @@
 package salimi.mohammad.testtwofortuner
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.util.Log
 import android.view.WindowManager
@@ -15,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,12 +25,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.sharp.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -37,8 +45,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -57,20 +68,24 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.res.ResourcesCompat
+
+import androidx.core.net.toUri
 import salimi.mohammad.testtwofortuner.ui.theme.MusicGold
 import salimi.mohammad.testtwofortuner.ui.theme.PearlWhite
 import kotlin.math.abs
@@ -79,48 +94,64 @@ import kotlin.math.sin
 
 @SuppressLint("DefaultLocale")
 @Composable
-fun TuneerScreen(tunerViewModel: TunerViewModel) {
-    val state by tunerViewModel.tunerState
-    val closestNote by tunerViewModel.closestNoteState
-    var tuning by tunerViewModel.tuningState
+fun TunerScreen(tunerViewModel: TunerViewModel, paddingValues: PaddingValues) {
+
     val context = LocalContext.current
+
+    val state by tunerViewModel.tunerState.collectAsState()
+    val closestNote by tunerViewModel.closestNoteState.collectAsState()
+    var tuning by tunerViewModel.tuningState
+
+
     val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
     val aFre: Int = sharedPreferences.getInt("A-frequency", 440)
+    val noteName: String = sharedPreferences.getString("NoteName", "ENGLISH") ?: "ENGLISH"
+    val noteSign: String = sharedPreferences.getString("NoteSign", "SIGN") ?: "SIGN"
     val selectedNumber = remember { mutableIntStateOf(aFre) }
+    //val  by remember { mutableStateOf(lan) }
+    //val  by remember { mutableStateOf(sign) }
+
+
     var showDialog by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
-    var keepScreenOn by remember { mutableStateOf(false) } // حالت پیش‌فرض: روشن ماندن صفحه
-    var deviationRounded = (state.deviation * 100).toInt() / 100f
+    var showSetting by remember { mutableStateOf(false) }
+    var keepScreenOn by remember { mutableStateOf(false) }
 
+    var deviationRounded = (state.deviation * 100).toInt() / 100f
     var isHighPrecisionMode = tunerViewModel.isHighPrecision.collectAsState(initial = false)
 
-    // اعمال یا حذف پرچم بر اساس انتخاب کاربر
+
     LaunchedEffect(keepScreenOn) {
         if (keepScreenOn) {
             (context as? MainActivity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
         } else {
             (context as? MainActivity)?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             deviationRounded = 0f
         }
     }
+
     LaunchedEffect(selectedNumber.intValue) {
         tuning = tuning.copy(referenceFrequency = selectedNumber.intValue.toFloat())
         MainActivity.getNotes(selectedNumber.intValue.toFloat())
         Log.e("Tuning", "Selected A4: ${selectedNumber.intValue} Hz")
     }
 
+
     val animatedDeviation by animateFloatAsState(
         targetValue = if (keepScreenOn) deviationRounded else 0f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
+            dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMedium
         ),
         label = "animatedDeviation"
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -167,7 +198,7 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
                         Checkbox(
                             checked = isHighPrecisionMode.value,
                             onCheckedChange = { isChecked ->
-                                tunerViewModel.isHighPrecision.value=isChecked
+                                tunerViewModel.isHighPrecision.value = isChecked
                                 (context as? MainActivity)?.stopAndRestartPitchDetection()
                                 Toast.makeText(
                                     context,
@@ -279,13 +310,32 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
                         )
                     }
 
+
+                    val persianSign = when (closestNote.sign) {
+                        "1" -> "بمل"
+                        "2" -> "کرن"
+                        "4" -> "سری"
+                        else -> ""
+                    }
                     val note =
-                        if (closestNote.name == "" || keepScreenOn == false) "---" else closestNote.name
+                        if (closestNote.name == "" || keepScreenOn == false) "---" else
+                            when (noteName) {
+                                "ENGLISH" -> closestNote.name
+                                "PERSIAN" -> closestNote.persianName
+                                "FRENCH" -> closestNote.frenchName
+                                else -> ""
+                            }
                     val octave =
                         if (closestNote.name == "---" || keepScreenOn == false) "-" else "${closestNote.octave}"
+
+                    val sign =
+                        if (closestNote.name == "---" || keepScreenOn == false) "" else if (noteSign == "SIGN") closestNote.sign else persianSign
                     textMusic.getTextBounds(note, 0, note.length, noteBounds)
+
                     val xNoteV = 98f
                     val yNoteV = yNote + noteBounds.height() + 40f
+                    textPaint.getTextBounds(note, 0, note.length, noteBounds)
+                    val x = xNoteV + noteBounds.width() + 15f
                     drawContext.canvas.nativeCanvas.apply {
                         drawText(
                             octave,
@@ -298,6 +348,14 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
                         drawText(
                             note,
                             xNoteV,
+                            yNoteV,
+                            textMusic
+                        )
+                    }
+                    drawContext.canvas.nativeCanvas.apply {
+                        drawText(
+                            sign,
+                            x,
                             yNoteV,
                             textMusic
                         )
@@ -345,12 +403,12 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
                     val textFreV = if (keepScreenOn == true)
                         "${
                             if (state.frequency > 0) String.format(
-                                "%.2f",
+                                "%.1f",
                                 state.frequency
-                            ) else "0.00"
+                            ) else "0.0"
                         } Hz"
                     else
-                        "0.00 Hz"
+                        "0.0 Hz"
                     val freVBounds = android.graphics.Rect()
                     textPaint.getTextBounds(textFreV, 0, textFreV.length, freVBounds)
                     val xx = size.width - freBounds.width() - 60f
@@ -500,23 +558,77 @@ fun TuneerScreen(tunerViewModel: TunerViewModel) {
                 }
             }
         }
-        IconButton(
-            onClick = { showAbout = true },
+        Row(
             modifier = Modifier
-                .size(35.dp)
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp),
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                painter = painterResource(R.drawable.information),
-                contentDescription = null,
-
-                tint = Color(0xFFd9a648)
-            )
+            IconButton(
+                onClick = { showAbout = true },
+                modifier = Modifier
+                    .size(48.dp)
+                    .padding(12.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.information),
+                    contentDescription = "About Dialog",
+                    tint = Color(0xFFd9a648),
+                )
+            }
+            IconButton(
+                onClick = {
+                    val packageName = context.packageName // نام پکیج اپلیکیشن شما
+                    try {
+                        // تلاش برای باز کردن کافه بازار
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, "market://details?id=$packageName".toUri())
+                        )
+                    } catch (e: ActivityNotFoundException) {
+                        // در صورت عدم نصب کافه بازار، باز کردن مرورگر
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                "https://cafebazaar.ir/app/$packageName".toUri()
+                            )
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .size(53.dp)
+                    // .align(Alignment.BottomCenter)
+                    .padding(12.dp)
+            ) {
+                Icon(
+                    Icons.Sharp.Star,
+                    contentDescription = "About Dialog",
+                    tint = Color(0xFFd9a648)
+                )
+            }
+            IconButton(
+                onClick = {
+                    showSetting = true
+                    tunerViewModel.keepScreenOn.value = false
+                    keepScreenOn = false
+                },
+                modifier = Modifier
+                    .size(53.dp)
+                    // .align(Alignment.BottomEnd)
+                    .padding(12.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.Settings,
+                    contentDescription = "Settings Dialog",
+                    tint = Color(0xFFd9a648)
+                )
+            }
         }
     }
     if (showAbout) {
         AboutDialog { showAbout = false }
+    }
+    if (showSetting) {
+        SettingDialog(onDismiss = { showSetting = false }, tunerViewModel = tunerViewModel)
     }
 }
 
@@ -625,7 +737,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(15.dp))
                 Text(
-                    text ="Email:\n" +
+                    text = "Email:\n" +
                             "Salimii.mohamadhosein@gmail.com\n",
                     style = MaterialTheme.typography.displaySmall,
                     fontSize = 16.sp,
@@ -634,7 +746,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text ="TelegramID:\n" +
+                    text = "TelegramID:\n" +
                             "Mohmmd_salimi\n",
                     style = MaterialTheme.typography.displaySmall,
                     fontSize = 16.sp,
@@ -643,9 +755,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(15.dp))
                 Text(
-                    text = "در صورتی که هرگونه پیشنهاد، انتقاد یا هرگونه مسئله در تشخیص تیونر مشاهده کردید به راه های ارتباطی بالا اطلاع دهید "
-
-                    ,
+                    text = "در صورتی که هرگونه پیشنهاد، انتقاد یا هرگونه مسئله در تشخیص تیونر مشاهده کردید به راه های ارتباطی بالا اطلاع دهید ",
                     style = MaterialTheme.typography.displayMedium,
                     color = PearlWhite,
                     textAlign = TextAlign.Center
@@ -661,6 +771,204 @@ fun AboutDialog(onDismiss: () -> Unit) {
                         color = Color(0xFF1E1E1E)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingDialog(onDismiss: () -> Unit, tunerViewModel: TunerViewModel) {
+    val context = LocalContext.current
+    val notes = listOf("C,D,E", "دو, ر, می", "Do,Re,Mi")
+    val notesSign = listOf(" 1 , 2 , 3 ", "بمل, کرن, سری")
+    val sharedPreferences: SharedPreferences =
+        context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
+    val noteName: String = sharedPreferences.getString("NoteName", "ENGLISH") ?: "ENGLISH"
+    val noteSign: String = sharedPreferences.getString("NoteSign", "SIGN") ?: "SIGN"
+    val editor: SharedPreferences.Editor = sharedPreferences.edit()
+
+    val n = when (noteName) {
+        "ENGLISH" -> notes[0]
+        "PERSIAN" -> notes[1]
+        "FRENCH" -> notes[2]
+        else -> notes[0]
+    }
+    val selectedOption = remember { mutableStateOf(n) }
+
+    val m = when (noteSign) {
+        "SIGN" -> notesSign[0]
+        "PERSIAN" -> notesSign[1]
+        else -> notesSign[0]
+    }
+    val selectedSign = remember { mutableStateOf(m) }
+
+    // LaunchedEffect برای رصد تغییرات noteName و noteSign
+    LaunchedEffect(selectedOption.value, selectedSign.value) {
+        val newNoteName = when (selectedOption.value) {
+            "C,D,E" -> "ENGLISH"
+            "دو, ر, می" -> "PERSIAN"
+            "Do,Re,Mi" -> "FRENCH"
+            else -> "ENGLISH"
+        }
+        val newNoteSign = when (selectedSign.value) {
+            " 1 , 2 , 3 " -> "SIGN"
+            "بمل, کرن, سری" -> "PERSIAN"
+            else -> "SIGN"
+        }
+        // ذخیره در SharedPreferences
+        editor.putString("NoteName", newNoteName)
+        editor.putString("NoteSign", newNoteSign)
+        editor.apply()
+
+        // فراخوانی تابع getNotes برای اعمال تغییرات
+        val aFre: Int = sharedPreferences.getInt("A-frequency", 440)
+        MainActivity.getNotes(aFre.toFloat())
+        Log.d("SettingDialog", "Applied NoteName: $newNoteName, NoteSign: $newNoteSign")
+    }
+
+    Dialog(onDismissRequest = { onDismiss() }) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(32.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+
+                    .wrapContentHeight()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Spacer(modifier = Modifier.width(48.dp))
+                    Text(
+                        text = "تنظیمات",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center
+                    )
+                    IconButton(
+                        onClick = { onDismiss() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Dialog",
+                            tint = Color(0xFFd9a648),
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                }
+                HorizontalDivider(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .shadow(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(8.dp),
+                            ambientColor = Color(0xFF000000).copy(alpha = 0.3f),
+                            spotColor = Color(0xFF000000).copy(alpha = 0.2f)
+                        ),
+                    thickness = 1.5.dp,
+                    color = Color(0xFFFFC107).copy(alpha = 0.7f)
+                )
+                Spacer(modifier = Modifier.height(22.dp))
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    Text(
+                        "شیوه نمایش نام نت:",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        notes.forEach { note ->
+                            RadioButton(
+                                selected = (selectedOption.value == note),
+                                onClick = { selectedOption.value = note },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color(0xFFd9a648)
+                                )
+                            )
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Rtl),
+                                modifier = Modifier
+                                    .padding(start = 0.dp)
+                                    .clickable { selectedOption.value = note }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(22.dp))
+                HorizontalDivider(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .shadow(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(8.dp),
+                            ambientColor = Color(0xFF000000).copy(alpha = 0.3f),
+                            spotColor = Color(0xFF000000).copy(alpha = 0.2f)
+                        ),
+                    thickness = 1.5.dp,
+                    color = Color(0xFFFFC107).copy(alpha = 0.7f)
+                )
+                Spacer(modifier = Modifier.height(22.dp))
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    Text(
+                        "شیوه نمایش نماد:",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp)
+                    ) {
+                        notesSign.forEach { noteSign ->
+                            RadioButton(
+                                selected = (selectedSign.value == noteSign),
+                                onClick = { selectedSign.value = noteSign },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color(0xFFd9a648)
+                                )
+                            )
+                            Text(
+                                text = noteSign,
+                                style = if (noteSign == " 1 , 2 , 3 ") MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
+                                modifier = Modifier
+                                    .padding(start = 0.dp)
+                                    .clickable { selectedSign.value = noteSign }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(22.dp))
+                HorizontalDivider(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .shadow(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(8.dp),
+                            ambientColor = Color(0xFF000000).copy(alpha = 0.3f),
+                            spotColor = Color(0xFF000000).copy(alpha = 0.2f)
+                        ),
+                    thickness = 1.5.dp,
+                    color = Color(0xFFFFC107).copy(alpha = 0.7f)
+                )
+                Spacer(modifier = Modifier.height(22.dp))
             }
         }
     }

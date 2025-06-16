@@ -9,10 +9,12 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextDirection.Companion.Rtl
 import androidx.compose.ui.unit.sp
 import salimi.mohammad.testtwofortuner.R
-
 val fontStandard = FontFamily(Font(R.font.digi_almas_bold))
 val fontBold = FontFamily(Font(R.font.digi_almas_bold))
 val fontAbout = FontFamily(Font(R.font.ferdosi))
+val fontSans = FontFamily(Font(R.font.sans_bold))
+val fontMusic = FontFamily(Font(R.font.mymusic))
+
 // Set of Material typography styles to start with
 val Typography = Typography(
     bodyLarge = TextStyle(
@@ -29,12 +31,27 @@ val Typography = Typography(
         lineHeight = 24.sp,
         letterSpacing = 0.5.sp,
 
+        ),
+    bodySmall = TextStyle(
+        fontFamily = fontSans,
+        fontWeight = FontWeight.Normal,
+        fontSize = 18.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.5.sp,
+
+        ),
+    labelSmall = TextStyle(
+        fontFamily = fontMusic,
+        fontWeight = FontWeight.Bold,
+        fontSize = 25.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.8.sp
     ),
     displayMedium = TextStyle(
-        fontFamily = fontAbout,
+        fontFamily = fontSans,
         fontWeight = FontWeight.Bold,
-        fontSize = 24.sp,
-        lineHeight = 24.sp,
+        fontSize = 20.sp,
+        lineHeight = 35.sp,
         letterSpacing = 0.5.sp,
 
         ),

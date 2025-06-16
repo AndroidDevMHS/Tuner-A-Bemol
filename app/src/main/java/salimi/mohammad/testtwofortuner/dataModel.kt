@@ -7,6 +7,7 @@ data class Note(
     val frequency: Double
 )
 
+
 data class TunerState(
     val frequency: Float = 0f,
     val note: String = "",
@@ -20,6 +21,9 @@ data class TuningState(
 
 data class ClosestNote(
     val name: String,
+    val persianName: String,
+    val frenchName: String,
     val octave: Int,
+    val sign: String,
     val standardFrequency: Double
 )
