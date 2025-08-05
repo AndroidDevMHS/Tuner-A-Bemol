@@ -14,6 +14,7 @@
 - زبان برنامه‌نویسی: Kotlin
 - رابط کاربری: Jetpack Compose
 - پردازش صدا: [TarsosDSP](https://github.com/JorenSix/TarsosDSP)
+- 
+##
 
-
-  ![تیونر لا بمل](app/src/main/res/drawable/a.png)
+  ![تیونر لا بمل](app/src/main/res/drawable/aa.png)
