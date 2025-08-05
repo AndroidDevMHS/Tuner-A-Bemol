@@ -14,4 +14,6 @@
 - زبان برنامه‌نویسی: Kotlin
 - رابط کاربری: Jetpack Compose
 - پردازش صدا: [TarsosDSP](https://github.com/JorenSix/TarsosDSP)
-- معماری: MVVM (با ViewModel و Hilt)
+
+
+  ![تیونر لا بمل](app/src/main/res/drawable/a.png)
