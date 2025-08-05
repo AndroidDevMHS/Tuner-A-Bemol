@@ -2,11 +2,12 @@ package salimi.mohammad.testtwofortuner
 
 data class Note(
     val name: String,
+    val persianName: String,
+    val frenchName: String,
     val octave: Int,
     val variation: String,
     val frequency: Double
 )
-
 
 data class TunerState(
     val frequency: Float = 0f,

@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
 
     <application
         android:allowBackup="true"
@@ -11,14 +13,17 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
-        android:supportsRtl="true"
+        android:supportsRtl="false"
         android:theme="@style/Theme.TestTwoForTuner"
-        tools:targetApi="31">
+        tools:targetApi="35">
+
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.TestTwoForTuner">
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.TestTwoForTuner"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

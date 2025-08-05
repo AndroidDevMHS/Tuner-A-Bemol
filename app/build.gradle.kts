@@ -7,16 +7,20 @@ plugins {
 
 android {
     namespace = "salimi.mohammad.testtwofortuner"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "salimi.mohammad.testtwofortuner"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 36
+        versionCode = 5
+        versionName = "1.21"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    lint {
+        checkReleaseBuilds = false
     }
 
     buildTypes {
@@ -59,7 +63,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    implementation("be.tarsos.dsp:core:2.5")
-    implementation("be.tarsos.dsp:jvm:2.5")
-    implementation ("com.google.code.gson:gson:2.11.0")
+    implementation(libs.core)
+    implementation(libs.jvm)
+    implementation (libs.gson)
 }

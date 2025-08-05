@@ -1,12 +1,12 @@
 package salimi.mohammad.testtwofortuner
 
 import android.Manifest
-import android.content.Context
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -17,9 +17,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import be.tarsos.dsp.AudioDispatcher
 import be.tarsos.dsp.filters.BandPass
@@ -27,6 +27,11 @@ import be.tarsos.dsp.io.TarsosDSPAudioFormat
 import be.tarsos.dsp.io.TarsosDSPAudioInputStream
 import be.tarsos.dsp.pitch.PitchDetectionHandler
 import be.tarsos.dsp.pitch.PitchProcessor
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import salimi.mohammad.testtwofortuner.ui.theme.TestTwoForTunerTheme
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -46,7 +51,13 @@ class MainActivity : ComponentActivity() {
     companion object {
         private var cachedNotes: List<Note> = emptyList()
         private var cachedA4Frequency: Float = 440f
-        private const val UPDATE_INTERVAL_MS = 10L
+        //var UPDATE_INTERVAL_MS = 30L
+
+        fun calculateUpdateIntervalMs(sampleRate: Int, bufferSize: Int): Long {
+            // محاسبه زمان پردازش یک بافر (در میلی‌ثانیه)
+            val bufferProcessingTimeMs = (bufferSize / 2.0 / sampleRate * 1000).toLong()
+            return bufferProcessingTimeMs.coerceIn(10L, 30L)
+        }
 
         fun getNotes(a4Frequency: Float): List<Note> {
             if (cachedNotes.isNotEmpty() && cachedA4Frequency == a4Frequency) {
@@ -120,6 +131,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+            }
+        }
+        FirebaseMessaging.getInstance().token.addOnSuccessListener {
+            Log.e("FCM", "Token: $it")
+        }
         setContent {
             TestTwoForTunerTheme {
                 Scaffold(
@@ -127,14 +147,20 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     TunerScreen(viewModel, innerPadding)
                     val on = viewModel.keepScreenOn.collectAsState()
+                    Log.e("3636","$on")
                     if (on.value)
                         checkAndStartRecording()
-                    else stopPitchDetection()
+                    else
+                        stopPitchDetection()
                 }
             }
         }
+    }
 
 
+    override fun onPause() {
+        super.onPause()
+        stopPitchDetection()
     }
 
     private fun checkAndStartRecording() {
@@ -156,7 +182,6 @@ class MainActivity : ComponentActivity() {
                     requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
             }
-
             else -> {
                 requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
@@ -170,6 +195,7 @@ class MainActivity : ComponentActivity() {
         audioRecord = null
         dispatcher?.stop()
         dispatcher = null
+        viewModel.keepScreenOn.value = false
     }
 
     fun stopAndRestartPitchDetection() {
@@ -182,11 +208,30 @@ class MainActivity : ComponentActivity() {
         startPitchDetection()
     }
 
+    val kalmanFilter = SimpleKalmanFilterKalm()
+
     private fun startPitchDetection() {
         if (isRecording) return
         try {
-            val sampleRate = 44100
-            val bufferSize = 2048
+            val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+            val sampleRateStr = audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
+            val sampleRate = sampleRateStr?.toInt() ?: 44100
+
+            val channelConfig = AudioFormat.CHANNEL_IN_STEREO
+            val audioFormatB = AudioFormat.ENCODING_PCM_16BIT
+            val minBufferSize = AudioRecord.getMinBufferSize(
+                sampleRate,
+                channelConfig,
+                audioFormatB
+            )
+            val bufferSize = (minBufferSize * 2).coerceAtLeast(1024).coerceAtMost(8192)
+
+            val updateIntervalMs = calculateUpdateIntervalMs(sampleRate, bufferSize)
+
+            Log.e(
+                "3636",
+                "sampleRate:$sampleRate || buffer:$bufferSize || UPDATE_INTERVAL_MS:$updateIntervalMs"
+            )
 
             if (ContextCompat.checkSelfPermission(
                     this,
@@ -246,72 +291,84 @@ class MainActivity : ComponentActivity() {
 
             dispatcher = AudioDispatcher(audioInputStream, bufferSize, 0)
 
-            val filter = BandPass(100f, 1500f, sampleRate.toFloat())
+            val filter = BandPass(50f, 1000f, sampleRate.toFloat())
             dispatcher?.addAudioProcessor(filter)
 
-            var lastValidPitchTime = 0L
-            val pitchTimeoutMs = 7000L
 
+            var lastValidPitchTime = 0L
+            var lastDeviationUpdateTime = 0L
+            val pitchTimeoutMs = 5000L
+            val hardResetAfterMs = 10_000L // مدت زمان نگه‌داشتن آخرین نت
+            var lastValidTunerState: TunerState? = null
 
             val pdh = PitchDetectionHandler { result, audioEvent ->
                 val pitchInHz = result.pitch
                 val probability = result.probability
                 val amplitude = audioEvent.rms
-                val isPitchReliable =
-                    probability > 0.8f && amplitude > 0.3f && amplitude < 15000f
-                val kalmanFilter = SimpleKalmanFilter()
-                val movingAverage = MovingAverage(2)
-                val simpleKalman = SimpleKalmanFilterKalm()
-                //Log.e("3636","pitchInHz:${pitchInHz}")
                 val currentTime = System.currentTimeMillis()
-                if (currentTime - lastDeviationUpdateTime < UPDATE_INTERVAL_MS) return@PitchDetectionHandler
 
-                if (pitchInHz > 100 && pitchInHz < 1500 && isPitchReliable) {
-                    runOnUiThread {
+                val isPitchReliable = probability > 0.8f && amplitude > 0.3f && amplitude < 15000f
+                if (currentTime - lastDeviationUpdateTime < updateIntervalMs) return@PitchDetectionHandler
 
+                CoroutineScope(Dispatchers.IO).launch {
+                    if (pitchInHz > 50 && pitchInHz < 1000 && isPitchReliable) {
                         val effectivePitch = if (viewModel.isHighPrecision.value) {
-                            kalmanFilter.update(pitchInHz.toDouble())
+                            kalmanFilter.update(pitchInHz)
                         } else {
-                            simpleKalman.update(pitchInHz.toDouble())
+                            pitchInHz
                         }
-                        Log.e("3636", "pitchInHz:${simpleKalman.update(pitchInHz.toDouble())}")
+
                         val tuningState = viewModel.tuningState.value
                         val standardFrequencies = getNotes(tuningState.referenceFrequency)
-                        val closestNote =
-                            getClosestNote(effectivePitch.toFloat(), standardFrequencies)
+                        val closestNote = getClosestNote(effectivePitch, standardFrequencies)
                         val deviation = calculateDeviation(
                             effectivePitch.toDouble(),
                             closestNote.standardFrequency
                         )
 
-                        viewModel.tunerState.value = TunerState(
-                            frequency = effectivePitch.toFloat(),
+                        val newTunerState = TunerState(
+                            frequency = effectivePitch,
                             note = closestNote.name,
                             deviation = deviation,
                             hasValidPitch = true
                         )
-                        viewModel.closestNoteState.value = closestNote
+
                         lastValidPitchTime = currentTime
                         lastDeviationUpdateTime = currentTime
-                    }
-                } else {
-                    runOnUiThread {
-                        if (currentTime - lastValidPitchTime > pitchTimeoutMs) {
-                            viewModel.tunerState.value = TunerState(
-                                frequency = 0f,
-                                note = "---",
-                                deviation = 0f,
-                                hasValidPitch = false
-                            )
-                            viewModel.closestNoteState.value =
-                                ClosestNote("---", "", "", 0, "", 0.0)
+                        lastValidTunerState = newTunerState
+
+                        withContext(Dispatchers.Main) {
+                            viewModel.tunerState.value = newTunerState
+                            viewModel.closestNoteState.value = closestNote
                         }
+                    } else {
+                        val timeSinceLastValid = currentTime - lastValidPitchTime
+
+                        if (timeSinceLastValid > hardResetAfterMs) {
+                            lastValidTunerState = null
+                            withContext(Dispatchers.Main) {
+                                viewModel.tunerState.value = TunerState(
+                                    frequency = 0f,
+                                    note = "---",
+                                    deviation = 0f,
+                                    hasValidPitch = false
+                                )
+                                viewModel.closestNoteState.value =
+                                    ClosestNote("---", "---", "---", 0, "", 0.0)
+                            }
+                        } else if (lastValidTunerState != null) {
+                            // نمایش آخرین نت بدون تغییر
+                            withContext(Dispatchers.Main) {
+                                viewModel.tunerState.value = lastValidTunerState!!
+                            }
+                        }
+
                         lastDeviationUpdateTime = currentTime
                     }
                 }
             }
             val pitchProcessor = PitchProcessor(
-                PitchProcessor.PitchEstimationAlgorithm.YIN,
+                PitchProcessor.PitchEstimationAlgorithm.MPM,
                 sampleRate.toFloat(),
                 bufferSize,
                 pdh
@@ -334,7 +391,9 @@ class MainActivity : ComponentActivity() {
             }
 
             Thread(dispatcher, "Audio Dispatcher").start()
+
         } catch (e: SecurityException) {
+
             runOnUiThread {
                 Toast.makeText(
                     this,
@@ -355,22 +414,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    data class Note(
-        val name: String,
-        val persianName: String,
-        val frenchName: String,
-        val octave: Int,
-        val variation: String,
-        val frequency: Double
-    )
-
     private fun getClosestNote(frequency: Float, standardNotes: List<Note>): ClosestNote {
         if (frequency <= 0) return ClosestNote("", "", "", 0, "", 0.0)
         val freqDouble = frequency.toDouble()
         val candidates = standardNotes
             .map { note -> note to abs(1200 * log2(freqDouble / note.frequency)) }
             .sortedBy { it.second }
-            .take(2) // بررسی سه کاندید برای دقت بیشتر
+            .take(3) // بررسی سه کاندید برای دقت بیشتر
 
         // انتخاب نت: ابتدا بکار، سپس کرن با انحراف بسیار کم
         val closest =

@@ -10,6 +10,8 @@ val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 val Green = Color(0xFF00CA00)
+
 val MusicPurple = Color(0xFF6A4C93)  // بنفش موزیکال
 val MusicGold = Color(0xFFFFD700)    // طلایی برای هایلایت
 val PearlWhite = Color(0xFFF5F5F5)   // سفید مرواریدی
+val PearBlack = Color(0x00000000)
